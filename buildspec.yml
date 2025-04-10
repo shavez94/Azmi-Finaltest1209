@@ -1,19 +1,21 @@
 version: 0.2
 
 phases:
-  install:
-    runtime-versions:
-      python: 3.9
-      docker: 18
+  pre_build:
     commands:
-      - pip install flask
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com
   build:
     commands:
-      - echo Logging into Amazon ECR...
-      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 211125401262.dkr.ecr.us-east-1.amazonaws.com
       - echo Building Docker image...
-      - docker build -t azmi-finaltest .
-      - docker tag azmi-finaltest 211125401262.dkr.ecr.us-east-1.amazonaws.com/azmi-finaltest
-      - docker push 211125401262.dkr.ecr.us-east-1.amazonaws.com/azmi-finaltest
+      - docker build -t $ECR_REPO .
+      - docker tag $ECR_REPO:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
+  post_build:
+    commands:
+      - echo Pushing Docker image...
+      - docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest
+      - echo Writing image definitions...
+      - printf '[{"name":"azmi-container","imageUri":"%s"}]' $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest > imagedefinitions.json
+
 artifacts:
-  files: "**/*"
+  files: imagedefinitions.json

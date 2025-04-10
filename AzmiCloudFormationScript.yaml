@@ -1,33 +1,28 @@
-AWSTemplateFormatVersion: '2010-09-09'
-Description: CloudFormation script for ECS Fargate 
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Full IaC for Azmi Final Test - ECS Fargate App with CI/CD pipeline, VPC, Load Balancer, Alarms
 
 Parameters:
   ECRRepositoryName:
     Type: String
-    Description: Name of the existing ECR repository
-    Default: ECR-Repo
+    Default: azmi-finaltest
 
   GitHubOwner:
     Type: String
-    Description: GitHub username or organization
-    Default: your-github-username
+    Default: shavez94
 
   GitHubRepo:
     Type: String
-    Description: GitHub repository name
-    Default: your-repo-name
+    Default: Azmi-Finaltest1209
 
   GitHubBranch:
     Type: String
-    Description: GitHub branch to pull
     Default: main
 
   CodeStarConnectionArn:
     Type: String
-    Description: ARN of Connection to GitHub
+    Default: arn:aws:codestar-connections:us-east-1:211125401262:connection/0df2e0a6-d6ee-438c-a029-5b31ba123b91
 
 Resources:
-  # VPC Setup
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -36,14 +31,14 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: gangwar-VPC
+          Value: azmi-vpc
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
-          Value: gangwar-IGW
+          Value: azmi-igw
 
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -56,49 +51,50 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.1.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: gangwar-PublicSubnet1
+          Value: azmi-public-subnet-1
 
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.2.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
-          Value: gangwar-PublicSubnet2
+          Value: azmi-public-subnet-2
 
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.3.0/24
-      AvailabilityZone: !Select [0, !GetAZs '']
+      AvailabilityZone: !Select [0, !GetAZs ""]
       Tags:
         - Key: Name
-          Value: gangwar-PrivateSubnet1
+          Value: azmi-private-subnet-1
 
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
       CidrBlock: 10.0.4.0/24
-      AvailabilityZone: !Select [1, !GetAZs '']
+      AvailabilityZone: !Select [1, !GetAZs ""]
       Tags:
         - Key: Name
-          Value: gangwar-PrivateSubnet2
+          Value: azmi-private-subnet-2
 
-  # Public Route Table for Public Subnets
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: gangwar-PublicRouteTable
+          Value: azmi-public-rt
 
   PublicRoute:
     Type: AWS::EC2::Route
@@ -120,11 +116,13 @@ Resources:
       SubnetId: !Ref PublicSubnet2
       RouteTableId: !Ref PublicRouteTable
 
-  # NAT Gateway Setup for Private Subnets
   NATGatewayEIP:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
+      Tags:
+        - Key: Name
+          Value: azmi-nat-eip
 
   NATGateway:
     Type: AWS::EC2::NatGateway
@@ -133,7 +131,7 @@ Resources:
       SubnetId: !Ref PublicSubnet1
       Tags:
         - Key: Name
-          Value: gangwar-NATGateway
+          Value: azmi-nat-gateway
 
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
@@ -141,7 +139,7 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: gangwar-PrivateRouteTable
+          Value: azmi-private-rt
 
   PrivateRoute:
     Type: AWS::EC2::Route
@@ -161,89 +159,17 @@ Resources:
     Properties:
       SubnetId: !Ref PrivateSubnet2
       RouteTableId: !Ref PrivateRouteTable
-
-  # S3 Bucket for CodePipeline Artifacts
-  CodePipelineArtifactBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub gangwar-codepipeline-artifacts-${AWS::AccountId}-${AWS::Region}
-      VersioningConfiguration:
-        Status: Enabled
-      Tags:
-        - Key: Name
-          Value: gangwar-CodePipelineArtifacts
-
-  # Application Load Balancer
-  ALBSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: gangwar-ALB Security Group
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-
-  ApplicationLoadBalancer:
-    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    Properties:
-      Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
-      SecurityGroups:
-        - !Ref ALBSecurityGroup
-      Tags:
-        - Key: Name
-          Value: gangwar-ALB
-
-  ALBTargetGroup:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroup
-    Properties:
-      VpcId: !Ref VPC
-      Port: 80
-      Protocol: HTTP
-      HealthCheckProtocol: HTTP
-      HealthCheckPath: /
-      TargetType: ip
-
-  ALBListener:
-    Type: AWS::ElasticLoadBalancingV2::Listener
-    Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
-      Port: 80
-      Protocol: HTTP
-      DefaultActions:
-        - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
-
-  # ECS Setup
   ECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
-      ClusterName: gangwar-ECSCluster
-
-  ECSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: gangwar-ECS Security Group
-      VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: 0.0.0.0/0
+      ClusterName: azmi-ecs-cluster
 
   ECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: azmi-ecs-task-execution-role
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
@@ -255,26 +181,71 @@ Resources:
   ECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
-      Family: gangwar-task
+      Family: azmi-task-definition
+      Cpu: 256
+      Memory: 512
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      Cpu: '256'
-      Memory: '512'
       ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
       ContainerDefinitions:
-        - Name: gangwar-app
+        - Name: azmi-container
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepositoryName}:latest
           PortMappings:
-            - ContainerPort: 80
+            - ContainerPort: 4000
           Essential: true
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: azmi-alb-sg
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: azmi-alb
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Scheme: internet-facing
+      Type: application
+      IpAddressType: ipv4
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: azmi-target-group
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref VPC
+      TargetType: ip
+      HealthCheckPath: /
+      HealthCheckProtocol: HTTP
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
 
   ECSService:
     Type: AWS::ECS::Service
     DependsOn: ALBListener
     Properties:
+      ServiceName: azmi-ecs-service
       Cluster: !Ref ECSCluster
-      ServiceName: gangwar-ECSService
       TaskDefinition: !Ref ECSTaskDefinition
       DesiredCount: 2
       LaunchType: FARGATE
@@ -284,102 +255,72 @@ Resources:
             - !Ref PrivateSubnet1
             - !Ref PrivateSubnet2
           SecurityGroups:
-            - !Ref ECSSecurityGroup
+            - !Ref ALBSecurityGroup
       LoadBalancers:
-        - TargetGroupArn: !Ref ALBTargetGroup
-          ContainerName: gangwar-app
-          ContainerPort: 80
-
-  # Auto Scaling for ECS Service
-  ECSAutoScalingTarget:
-    Type: AWS::ApplicationAutoScaling::ScalableTarget
+        - ContainerName: azmi-container
+          ContainerPort: 4000
+          TargetGroupArn: !Ref ALBTargetGroup
+  CodePipelineArtifactBucket:
+    Type: AWS::S3::Bucket
     Properties:
-      MaxCapacity: 4
-      MinCapacity: 2
-      ResourceId: !Sub service/${ECSCluster}/${ECSService.Name}
-      ScalableDimension: ecs:service:DesiredCount
-      ServiceNamespace: ecs
+      BucketName: !Sub azmi-artifact-bucket-${AWS::AccountId}-${AWS::Region}
+      VersioningConfiguration:
+        Status: Enabled
 
-  ECSAutoScalingPolicy:
-    Type: AWS::ApplicationAutoScaling::ScalingPolicy
-    Properties:
-      PolicyName: gangwar-ECSScalingPolicy
-      PolicyType: TargetTrackingScaling
-      ScalingTargetId: !Ref ECSAutoScalingTarget
-      TargetTrackingScalingPolicyConfiguration:
-        TargetValue: 50.0
-        PredefinedMetricSpecification:
-          PredefinedMetricType: ECSServiceAverageCPUUtilization
-
-  # CodeBuild Setup
   CodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: azmi-codebuild-role
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: codebuild.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: CodeBuildPolicy
+        - PolicyName: azmi-codebuild-policy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
-                  - logs:CreateLogGroup
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                  - ecr:GetAuthorizationToken
-                  - ecr:BatchCheckLayerAvailability
-                  - ecr:CompleteLayerUpload
-                  - ecr:InitiateLayerUpload
-                  - ecr:PutImage
-                  - ecr:UploadLayerPart
-                  - s3:GetObject
-                  - s3:PutObject
-                Resource: '*'
+                  - logs:*
+                  - ecr:*
+                  - s3:*
+                Resource: "*"
 
   CodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: gangwar-CodeBuild
+      Name: azmi-codebuild-project
       ServiceRole: !GetAtt CodeBuildRole.Arn
       Artifacts:
         Type: CODEPIPELINE
       Environment:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_SMALL
-        Image: aws/codebuild/standard:5.0
+        Image: aws/codebuild/standard:6.0
         PrivilegedMode: true
-        EnvironmentVariables:
-          - Name: AWS_ACCOUNT_ID
-            Value: !Ref AWS::AccountId
-          - Name: AWS_REGION
-            Value: !Ref AWS::Region
-          - Name: ECR_REPO
-            Value: !Ref ECRRepositoryName
       Source:
         Type: CODEPIPELINE
         BuildSpec: buildspec.yml
 
-  # CodePipeline Setup
   CodePipelineRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: azmi-codepipeline-role
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: codepipeline.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: CodePipelinePolicy
+        - PolicyName: azmi-pipeline-policy
           PolicyDocument:
-            Version: '2012-10-17'
+            Version: "2012-10-17"
             Statement:
               - Effect: Allow
                 Action:
@@ -388,64 +329,64 @@ Resources:
                   - codestar-connections:*
                   - ecs:*
                   - iam:PassRole
-                Resource: '*'
+                Resource: "*"
 
   CodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
+      Name: azmi-pipeline
       RoleArn: !GetAtt CodePipelineRole.Arn
       ArtifactStore:
         Type: S3
-        Location: !Ref CodePipelineArtifactBucket  # Reference the new bucket
+        Location: !Ref CodePipelineArtifactBucket
       Stages:
         - Name: Source
           Actions:
-            - Name: SourceAction
+            - Name: GitHubSource
               ActionTypeId:
                 Category: Source
                 Owner: AWS
                 Provider: CodeStarSourceConnection
-                Version: '1'
+                Version: "1"
               OutputArtifacts:
-                - Name: SourceArtifact
+                - Name: SourceOutput
               Configuration:
                 ConnectionArn: !Ref CodeStarConnectionArn
                 FullRepositoryId: !Sub ${GitHubOwner}/${GitHubRepo}
                 BranchName: !Ref GitHubBranch
         - Name: Build
           Actions:
-            - Name: BuildAction
+            - Name: DockerBuild
               ActionTypeId:
                 Category: Build
                 Owner: AWS
                 Provider: CodeBuild
-                Version: '1'
+                Version: "1"
               InputArtifacts:
-                - Name: SourceArtifact
+                - Name: SourceOutput
               OutputArtifacts:
-                - Name: BuildArtifact
+                - Name: BuildOutput
               Configuration:
                 ProjectName: !Ref CodeBuildProject
         - Name: Deploy
           Actions:
-            - Name: DeployAction
+            - Name: DeployToECS
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
                 Provider: ECS
-                Version: '1'
+                Version: "1"
               InputArtifacts:
-                - Name: BuildArtifact
+                - Name: BuildOutput
               Configuration:
                 ClusterName: !Ref ECSCluster
                 ServiceName: !Ref ECSService
                 FileName: imagedefinitions.json
 
-  # CloudWatch Alarm for Pipeline Failures
-  PipelineFailureAlarm:
+  CloudWatchPipelineFailureAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
-      AlarmDescription: Alarm for CodePipeline failures
+      AlarmDescription: Alert for azmi-pipeline failure
       Namespace: AWS/CodePipeline
       MetricName: PipelineExecutionFailed
       Dimensions:
@@ -456,15 +397,20 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
-      AlarmActions: [] # Add SNS topic ARN if needed
 
 Outputs:
-  ALBEndpoint:
-    Description: URL of the Application Load Balancer
-    Value: !Sub http://${ApplicationLoadBalancer.DNSName}
-  ECSClusterName:
-    Description: Name of the ECS Cluster
+  AzmiALBDNS:
+    Description: Public ALB endpoint
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+
+  AzmiClusterName:
+    Description: ECS Cluster
     Value: !Ref ECSCluster
-  ECSServiceName:
-    Description: Name of the ECS Service
+
+  AzmiServiceName:
+    Description: ECS Service
     Value: !Ref ECSService
+
+  AzmiPipelineName:
+    Description: CodePipeline
+    Value: !Ref CodePipeline
