@@ -23,7 +23,7 @@ Parameters:
     Default: arn:aws:codestar-connections:us-east-1:211125401262:connection/0df2e0a6-d6ee-438c-a029-5b31ba123b91
 
 Resources:
-  VPC:
+  AzmiVPC:
     Type: AWS::EC2::VPC
     Properties:
       CidrBlock: 10.0.0.0/16
@@ -33,138 +33,67 @@ Resources:
         - Key: Name
           Value: azmi-vpc
 
-  InternetGateway:
+  AzmiInternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
       Tags:
         - Key: Name
           Value: azmi-igw
 
-  AttachGateway:
+  AzmiVPCGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
-      VpcId: !Ref VPC
-      InternetGatewayId: !Ref InternetGateway
+      VpcId: !Ref AzmiVPC
+      InternetGatewayId: !Ref AzmiInternetGateway
 
-  PublicSubnet1:
+  AzmiPublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.1.0/24
+      VpcId: !Ref AzmiVPC
       AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: azmi-public-subnet-1
 
-  PublicSubnet2:
+  AzmiPublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.2.0/24
+      VpcId: !Ref AzmiVPC
       AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.2.0/24
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: azmi-public-subnet-2
 
-  PrivateSubnet1:
+  AzmiPrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.3.0/24
+      VpcId: !Ref AzmiVPC
       AvailabilityZone: !Select [0, !GetAZs ""]
+      CidrBlock: 10.0.3.0/24
       Tags:
         - Key: Name
           Value: azmi-private-subnet-1
 
-  PrivateSubnet2:
+  AzmiPrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
-      VpcId: !Ref VPC
-      CidrBlock: 10.0.4.0/24
+      VpcId: !Ref AzmiVPC
       AvailabilityZone: !Select [1, !GetAZs ""]
+      CidrBlock: 10.0.4.0/24
       Tags:
         - Key: Name
           Value: azmi-private-subnet-2
 
-  PublicRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: azmi-public-rt
-
-  PublicRoute:
-    Type: AWS::EC2::Route
-    DependsOn: AttachGateway
-    Properties:
-      RouteTableId: !Ref PublicRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref InternetGateway
-
-  PublicSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet1
-      RouteTableId: !Ref PublicRouteTable
-
-  PublicSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PublicSubnet2
-      RouteTableId: !Ref PublicRouteTable
-
-  NATGatewayEIP:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: azmi-nat-eip
-
-  NATGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NATGatewayEIP.AllocationId
-      SubnetId: !Ref PublicSubnet1
-      Tags:
-        - Key: Name
-          Value: azmi-nat-gateway
-
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: azmi-private-rt
-
-  PrivateRoute:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NATGateway
-
-  PrivateSubnet1RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet1
-      RouteTableId: !Ref PrivateRouteTable
-
-  PrivateSubnet2RouteTableAssociation:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      SubnetId: !Ref PrivateSubnet2
-      RouteTableId: !Ref PrivateRouteTable
-  ECSCluster:
+  AzmiECSCluster:
     Type: AWS::ECS::Cluster
     Properties:
       ClusterName: azmi-ecs-cluster
 
-  ECSTaskExecutionRole:
+  AzmiECSTaskExecutionRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: azmi-ecs-task-execution-role
@@ -178,7 +107,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 
-  ECSTaskDefinition:
+  AzmiECSTaskDefinition:
     Type: AWS::ECS::TaskDefinition
     Properties:
       Family: azmi-task-definition
@@ -187,87 +116,79 @@ Resources:
       NetworkMode: awsvpc
       RequiresCompatibilities:
         - FARGATE
-      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      ExecutionRoleArn: !GetAtt AzmiECSTaskExecutionRole.Arn
       ContainerDefinitions:
         - Name: azmi-container
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepositoryName}:latest
           PortMappings:
             - ContainerPort: 4000
-          Essential: true
 
-  ALBSecurityGroup:
+  AzmiALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: azmi-alb-sg
-      VpcId: !Ref VPC
+      GroupDescription: Allow HTTP
+      VpcId: !Ref AzmiVPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
 
-  ApplicationLoadBalancer:
+  AzmiApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
       Name: azmi-alb
       Subnets:
-        - !Ref PublicSubnet1
-        - !Ref PublicSubnet2
+        - !Ref AzmiPublicSubnet1
+        - !Ref AzmiPublicSubnet2
       SecurityGroups:
-        - !Ref ALBSecurityGroup
+        - !Ref AzmiALBSecurityGroup
       Scheme: internet-facing
       Type: application
-      IpAddressType: ipv4
 
-  ALBTargetGroup:
+  AzmiALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: azmi-target-group
       Port: 80
       Protocol: HTTP
-      VpcId: !Ref VPC
+      VpcId: !Ref AzmiVPC
       TargetType: ip
       HealthCheckPath: /
       HealthCheckProtocol: HTTP
 
-  ALBListener:
+  AzmiALBListener:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
-      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      LoadBalancerArn: !Ref AzmiApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
       DefaultActions:
         - Type: forward
-          TargetGroupArn: !Ref ALBTargetGroup
+          TargetGroupArn: !Ref AzmiALBTargetGroup
 
-  ECSService:
+  AzmiECSService:
     Type: AWS::ECS::Service
-    DependsOn: ALBListener
+    DependsOn: AzmiALBListener
     Properties:
       ServiceName: azmi-ecs-service
-      Cluster: !Ref ECSCluster
-      TaskDefinition: !Ref ECSTaskDefinition
+      Cluster: !Ref AzmiECSCluster
+      TaskDefinition: !Ref AzmiECSTaskDefinition
       DesiredCount: 2
       LaunchType: FARGATE
       NetworkConfiguration:
         AwsvpcConfiguration:
           Subnets:
-            - !Ref PrivateSubnet1
-            - !Ref PrivateSubnet2
+            - !Ref AzmiPrivateSubnet1
+            - !Ref AzmiPrivateSubnet2
           SecurityGroups:
-            - !Ref ALBSecurityGroup
+            - !Ref AzmiALBSecurityGroup
       LoadBalancers:
         - ContainerName: azmi-container
           ContainerPort: 4000
-          TargetGroupArn: !Ref ALBTargetGroup
-  CodePipelineArtifactBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub azmi-artifact-bucket-${AWS::AccountId}-${AWS::Region}
-      VersioningConfiguration:
-        Status: Enabled
+          TargetGroupArn: !Ref AzmiALBTargetGroup
 
-  CodeBuildRole:
+  AzmiCodeBuildRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: azmi-codebuild-role
@@ -285,16 +206,14 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - logs:*
-                  - ecr:*
-                  - s3:*
+                  - "*"
                 Resource: "*"
 
-  CodeBuildProject:
+  AzmiCodeBuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
       Name: azmi-codebuild-project
-      ServiceRole: !GetAtt CodeBuildRole.Arn
+      ServiceRole: !GetAtt AzmiCodeBuildRole.Arn
       Artifacts:
         Type: CODEPIPELINE
       Environment:
@@ -306,7 +225,14 @@ Resources:
         Type: CODEPIPELINE
         BuildSpec: buildspec.yml
 
-  CodePipelineRole:
+  AzmiPipelineArtifactBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub azmi-artifact-bucket-${AWS::AccountId}-${AWS::Region}
+      VersioningConfiguration:
+        Status: Enabled
+
+  AzmiCodePipelineRole:
     Type: AWS::IAM::Role
     Properties:
       RoleName: azmi-codepipeline-role
@@ -324,21 +250,17 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - s3:*
-                  - codebuild:*
-                  - codestar-connections:*
-                  - ecs:*
-                  - iam:PassRole
+                  - "*"
                 Resource: "*"
 
-  CodePipeline:
+  AzmiCodePipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       Name: azmi-pipeline
-      RoleArn: !GetAtt CodePipelineRole.Arn
+      RoleArn: !GetAtt AzmiCodePipelineRole.Arn
       ArtifactStore:
         Type: S3
-        Location: !Ref CodePipelineArtifactBucket
+        Location: !Ref AzmiPipelineArtifactBucket
       Stages:
         - Name: Source
           Actions:
@@ -367,7 +289,7 @@ Resources:
               OutputArtifacts:
                 - Name: BuildOutput
               Configuration:
-                ProjectName: !Ref CodeBuildProject
+                ProjectName: !Ref AzmiCodeBuildProject
         - Name: Deploy
           Actions:
             - Name: DeployToECS
@@ -379,38 +301,20 @@ Resources:
               InputArtifacts:
                 - Name: BuildOutput
               Configuration:
-                ClusterName: !Ref ECSCluster
-                ServiceName: !Ref ECSService
+                ClusterName: !Ref AzmiECSCluster
+                ServiceName: !Ref AzmiECSService
                 FileName: imagedefinitions.json
 
-  CloudWatchPipelineFailureAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: Alert for azmi-pipeline failure
-      Namespace: AWS/CodePipeline
-      MetricName: PipelineExecutionFailed
-      Dimensions:
-        - Name: PipelineName
-          Value: !Ref CodePipeline
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-
 Outputs:
-  AzmiALBDNS:
-    Description: Public ALB endpoint
-    Value: !GetAtt ApplicationLoadBalancer.DNSName
-
-  AzmiClusterName:
-    Description: ECS Cluster
-    Value: !Ref ECSCluster
-
-  AzmiServiceName:
-    Description: ECS Service
-    Value: !Ref ECSService
-
-  AzmiPipelineName:
-    Description: CodePipeline
-    Value: !Ref CodePipeline
+  ALBEndpoint:
+    Description: Public ALB URL
+    Value: !GetAtt AzmiApplicationLoadBalancer.DNSName
+  ECSClusterName:
+    Description: Name of ECS Cluster
+    Value: !Ref AzmiECSCluster
+  ECSServiceName:
+    Description: Name of ECS Service
+    Value: !Ref AzmiECSService
+  PipelineName:
+    Description: Name of CodePipeline
+    Value: !Ref AzmiCodePipeline
